@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+  <title>Security Camera</title>
+
+</head>
+<style>
+  body {
+        background: #eee;
+        padding: 5% 0;
+      }
+
+</style>
+<body>
+
+  <h1>Camera feed</h1>
+
+  <div id="videos">
+    <video id="localVideo" autoplay muted></video>
+    <video id="remoteVideo" autoplay></video>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.1.1/socket.io.dev.js"></script>
+  <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+  <script src="/js/index.js"></script>
+
+
+</body>
+
+</html>

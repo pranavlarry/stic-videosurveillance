@@ -1,10 +1,12 @@
 var socket=io();
-socket.on('connect',()=>{
+var room=window.prompt("Enter the room name of camera");
+socket.on('connect',function(){
   console.log('connected');
-  socket.emit('camID');
+
+  // socket.emit('camID',room);
 });
-var room='stic';
-var localStream,pc=[],no=0;
+socket.emit('join',room);
+var localStream,pc=[];
 // socket.emit('join',room);
 var localVideo = document.querySelector('#localVideo');
 //var remoteVideo = document.querySelector('#remoteVideo');
@@ -22,97 +24,85 @@ function gotStream(stream) {
   localStream = stream;
   localVideo.srcObject = stream;
 }
-
-socket.on('channelReady',(client)=>{
-  console.log('got it');
-  no=client-1;
-  console.log('no:',no);
-  createPeerConnection();
-  pc[no].addStream(localStream);
-  doCall();
+socket.on('channelReady',(id)=>{
+  console.log('got channel');
+  socket.emit('myId',{id:socket.id,room:room,toid:id});
+  createPeerConnection(id);
+  pc[id].addStream(localStream);
+  doCall(id);
 });
-socket.on('message', function(message) {
-  console.log('Client received message:', message);
- if (message.type === 'offer') {
+
+socket.on('cmessage', function(dobj) {
+  console.log('Client received message:', dobj.message);
+ if (dobj.message.type === 'offer') {
    console.log('getting offer');
-    pc[no].setRemoteDescription(new RTCSessionDescription(message));
-    console.log(message);
+    pc[dobj.myid].setRemoteDescription(new RTCSessionDescription(dobj.message));
+    console.log(dobj.message);
     // doAnswer();
-  } else if (message.type === 'answer') {
+  } else if(dobj.message.type === 'answer') {
     console.log('got answer');
-    pc[no].setRemoteDescription(new RTCSessionDescription(message));
-  } else if (message.type === 'candidate') {
+    pc[dobj.myid].setRemoteDescription(new RTCSessionDescription(dobj.message));
+  } else if (dobj.message.type === 'candidate') {
     var candidate = new RTCIceCandidate({
-      sdpMLineIndex: message.label,
-      candidate: message.candidate
+      sdpMLineIndex: dobj.message.label,
+      candidate: dobj.message.candidate
     });
-    pc[no].addIceCandidate(candidate);
+    pc[dobj.myid].addIceCandidate(candidate);
   } //else if (message === 'bye' && isStarted) {
   //   handleRemoteHangup();
   // }
 });
 
-function doCall() {
+function doCall(id) {
   console.log('Sending offer to peer');
-  pc[no].createOffer(setLocalAndSendMessage, handleCreateOfferError);
+  pc[id].createOffer(setLocalAndSendMessage, handleCreateOfferError);
+
+  function setLocalAndSendMessage(sessionDescription) {
+    console.log('Inside local description');
+    pc[id].setLocalDescription(sessionDescription);
+    console.log('setLocalAndSendMessage sending message', sessionDescription);
+    sendMessage(sessionDescription,{id:socket.id,room:room,toid:id});
+  }
 }
 
-function createPeerConnection() {
+function createPeerConnection(id) {
   try {
-    var p = new RTCPeerConnection(null);
-    console.log('p:---',p);
-    console.log('no create:-',no);
-    pc.push(p);
-    console.log('pc[0]:-',pc[0]);
-    console.log('pc[1]:-',pc[1]);
-    pc[no].onicecandidate = handleIceCandidate;
-    // pc[no].onaddstream = handleRemoteStreamAdded;
-    // pc[no].onremovestream = handleRemoteStreamRemoved;
+    pc[id] = new RTCPeerConnection(null);
+    pc[id].onicecandidate = handleIceCandidate;
+    // pc.onaddstream = handleRemoteStreamAdded;
+    // pc.onremovestream = handleRemoteStreamRemoved;
     console.log('Created RTCPeerConnnection');
   } catch (e) {
     console.log('Failed to create PeerConnection, exception: ' + e.message);
     alert('Cannot create RTCPeerConnection object.');
     return;
   }
-}
-
-function handleIceCandidate(event) {
-  console.log('icecandidate event: ', event);
-  if (event.candidate) {
-    sendMessage({
-      type: 'candidate',
-      label: event.candidate.sdpMLineIndex,
-      id: event.candidate.sdpMid,
-      candidate: event.candidate.candidate
-    });
-  } else {
-    console.log('End of candidates.');
+  function handleIceCandidate(event) {
+    console.log('icecandidate event: ', event);
+    if (event.candidate) {
+      sendMessage({
+        type: 'candidate',
+        label: event.candidate.sdpMLineIndex,
+        id: event.candidate.sdpMid,
+        candidate: event.candidate.candidate
+      },{id:socket.id,room:room,toid:id});
+    } else {
+      console.log('End of candidates.');
+    }
   }
 }
 
-function setLocalAndSendMessage(sessionDescription) {
-  console.log('Inside local description');
-  pc[no].setLocalDescription(sessionDescription);
-  console.log('setLocalAndSendMessage sending message', sessionDescription);
-  sendMessage(sessionDescription);
-}
+
 
 function handleCreateOfferError(event) {
   console.log('createOffer() error: ', event);
 }
 
-function doAnswer() {
-  console.log('Sending answer to peer.');
-  pc[no].createAnswer().then(
-    setLocalAndSendMessage,
-    onCreateSessionDescriptionError
-  );
-}
 function onCreateSessionDescriptionError(error) {
   trace('Failed to create session description: ' + error.toString());
 }
 
-function sendMessage(message) {
+function sendMessage(message,obj) {
   console.log('Client sending message: ', message);
-  socket.emit('message', message);
+  socket.emit('message',{message,obj});
 }
